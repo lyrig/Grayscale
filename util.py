@@ -1,3 +1,4 @@
+from turtle import color
 import torch
 from torchvision.transforms import transforms
 
@@ -139,7 +140,7 @@ def Bitplane_construct(Bitplane):
 # ===========直方图处理===============
 # 注：目前只集成的函数（直方图规定化）只能规定到某个图像，想要自定义直方图，在compute_histogram一步替代即可。
 
-def compute_histogram(img, normal=True):
+def compute_histogram(img, normal=True, name='ref', compare=False, img2=None):
     number, counts = np.unique(img, return_counts=True)
     # print(number)
     # print(np.sum(counts))
@@ -148,9 +149,15 @@ def compute_histogram(img, normal=True):
     # print()
     plt.figure()
     plt.bar(x=[i for i in range(len(number))], height=counts)
-    plt.savefig('./hist.png')
+    plt.savefig(f'./hist{name}.png')
+    if compare:
+        number2, counts2 = np.unique(img2, return_counts=True)
+        if normal:
+            counts2 = counts2/np.sum(counts2)
+        plt.bar(x=[i for i in range(len(number2))], height=counts2,color='red')
+        plt.savefig(f'./comparehist{name}.png')
     print()
-    np.savez('./hist.npz', number, counts)
+    np.savez(f'./hist_{name}.npz', number, counts)
     return {'number':number, 'counts':counts}
 
 def compute_histogram_equalization(hist, need_per=False, T=256):
@@ -215,12 +222,18 @@ def compute_histogram_regularization(img, target, T=256, method='single'):
     elif method=='group':
         for i_ids in range(T):
             min = 999999
+
             for t_ids in range(0, i_ids+1):
-                if abs(input_raw[i_ids] - target_raw[t_ids]) >= min:
-                    reflect.append(t_ids)
+                if abs(input_raw[i_ids] - target_raw[t_ids]) > min:
+                    reflect.append(t_ids-1)
                     break
                 else:
                     min = abs(input_raw[i_ids] - target_raw[t_ids])
+
+                if t_ids == i_ids:
+                    # print("True")
+                    # print(t_ids)
+                    reflect.append(t_ids)
         
     return reflect
 
@@ -234,18 +247,22 @@ def histogram_regularization(img, target, T=256, method='single'):
             nc = func(img[x][y])
             new_img[x].append(nc)
         
-    return new_img
+    return np.array(new_img)
 
 
 if __name__ == '__main__':
     dir = '/home/vision/diska4/shy/NerfDiff/data/LIDC/XRay-Coronal-X2CT'
     path = os.path.join(dir, '0001.png')
-    img = read_img_asnp('/home/vision/diska4/shy/Grayscale/equ.png')
-
+    img2 = read_img_asnp('/home/vision/diska4/shy/Grayscale/img/tg.png')
+    img1 = read_img_asnp('/home/vision/diska4/shy/NerfDiff/data/LIDC/CT-reshape-img/0002_reshape.png')
+    # save_img_tensor(f'./raw_img.png', torch.Tensor(img1))
+    new_img = histogram_regularization(img=img1, target=img2, method='group')
     # ret = picture_inversion(img)
 
-    compute_histogram(img)
-    ret = logarithm_transformation(img, left=130, right=255)
+    compute_histogram(new_img, name='RawCompareg', compare=True, img2=img2)
+    new_img = torch.Tensor(new_img)
+    save_img_tensor(f'./new_img.png', new_img)
+    # ret = logarithm_transformation(img, left=130, right=255)
     # t = np.load('./hist.npz').files
 
     # ret = Bitplane_stratification(img)
@@ -258,5 +275,5 @@ if __name__ == '__main__':
     # ret = Bitplane_construct(ret)
     # print(ret)
     # print(ret.shape)
-    save_img_tensor(f'./log.png', ret)
+    # save_img_tensor(f'./log.png', ret)
 
